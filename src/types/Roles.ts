@@ -67,3 +67,5 @@ export const ROLE_DEFINITIONS: Record<Role, RoleDefinition> = {
     },
   },
 };
+
+export const ROLES: readonly Role[] = Object.values(Role);

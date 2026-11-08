@@ -1,4 +1,5 @@
-import { Denial } from "./auth/policy";
+import { Denial } from "@/types/Policy";
+
 
 export type ErrorCode =
   | "UNAUTHENTICATED"
@@ -24,4 +25,18 @@ export function ok<T>(value: T): Result<T> {
 
 export function fail<T = never>(error: AppError): Result<T> {
   return { ok: false, error };
+}
+
+export function errorFromDenials(denials: Denial[]): AppError {
+  const [primary] = denials;
+  if (!primary) {
+    return { status: 403, code: "FORBIDDEN", message: "Forbidden." };
+  }
+  const isInvariant = primary.code !== "FORBIDDEN";
+  return {
+    status: isInvariant ? 409 : 403,
+    code: primary.code,
+    message: denials.map((d) => d.message).join(" "),
+    details: denials,
+  };
 }

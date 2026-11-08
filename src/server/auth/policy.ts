@@ -36,6 +36,10 @@ export function canCreateUser(actor: User): boolean {
   return getRoleDefinition(actor.role).can.createUser;
 }
 
+export function canAssignManagers(actor: User): boolean {
+  return getRoleDefinition(actor.role).can.assignManager;
+}
+
 export function filterVisibleUsers(actor: User, users: readonly User[]): User[] {
   return users.filter((u) => canViewUser(actor, u));
 }
