@@ -1,5 +1,5 @@
 import z from "zod";
-import { AppError } from "../result";
+import { AppError, Result } from "../result";
 import { zodDetails } from "./schemas";
 
 export type Parsed<T> = { ok: true; data: T } | { ok: false; response: Response };
@@ -37,4 +37,10 @@ export async function parseJsonBody<S extends z.ZodType>(
     };
   }
   return parseWith(schema, body);
+}
+
+export function respond<T>(result: Result<T>, successStatus = 200): Response {
+  return result.ok
+    ? Response.json(result.value, { status: successStatus })
+    : errorResponse(result.error);
 }

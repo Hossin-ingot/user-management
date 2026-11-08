@@ -1,4 +1,5 @@
 import { getStore } from "@/data/store";
+import { User } from "@/types/Models";
 import { randomBytes } from "node:crypto";
 
 export const SESSION_COOKIE = "session";
@@ -19,6 +20,25 @@ export function revokeSessionsForUser(userId: string): void {
   for (const [token, session] of sessions) {
     if (session.userId === userId) sessions.delete(token);
   }
+}
+
+export function resolveSession(token: string | undefined): User | null {
+  if (!token) return null;
+  const store = getStore();
+  const session = store.sessions.get(token);
+  if (!session) return null;
+
+  if (Date.now() - session.createdAt > SESSION_TTL_MS) {
+    store.sessions.delete(token);
+    return null;
+  }
+
+  const user = store.users.get(session.userId);
+  if (!user || user.status !== "active") {
+    store.sessions.delete(token);
+    return null;
+  }
+  return user;
 }
 
 export const sessionCookieOptions = {
