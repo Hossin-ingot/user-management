@@ -159,7 +159,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -b /tmp/olena.jar $B/api/clients
 
 ## Time spent
 
-About 4 h 45 min of building, in one sitting (11:00–15:45 in the commit history), plus the documentation afterwards. The order was deliberate: the permission policy, sessions and the users/clients API (rules 1–5) were built and verified with curl first; the UI came after. It was my first project on Next.js 16, and part of the time went into its changes (`forbidden()`, Cache Components, `proxy.ts`).
+About 4 h 45 min of building, in one sitting (11:00–15:45 in the commit history), plus the documentation afterwards. The order was deliberate: the permission policy, sessions and the users/clients API (rules 1–5) were built and verified with curl first; the UI came after.
 
 ## 5. With another four hours
 
