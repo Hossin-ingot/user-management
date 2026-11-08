@@ -14,7 +14,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           {actor && canViewContent(actor) && (
             <>
               <Link href="/content">Clients</Link>
-              <Link href="/content/profile">My profile</Link>
+              <Link href="/content/me">My profile</Link>
             </>
           )}
           {actor && canAccessUserManagement(actor) && <Link href="/manage-users">Manage users</Link>}
