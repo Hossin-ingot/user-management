@@ -1,6 +1,6 @@
 # User Management & Content
 
-A small Next.js 16 app with three non-hierarchical roles (IT, manager, user), an in-memory store, a server-paginated directory of 1,250 generated clients, and a permission model enforced on the server and tested through the HTTP API.
+A small Next.js 16 app with three non-hierarchical roles (IT, manager, user), an in-memory store, a server-paginated directory of 1,250 generated clients, and a permission model enforced on the server, so it holds when the API is called directly.
 
 ## 1. How to run it
 
@@ -12,7 +12,7 @@ npm run dev          # → http://localhost:3000
 # or a production build:
 npm run build && npm start
 
-npm test             # 42 tests: policy unit tests + every scenario from the brief via the API
+npm test             # 15 unit tests for the permission policy (rules 2–4)
 npm run check        # typecheck + lint + tests
 ```
 
@@ -38,7 +38,7 @@ Every account uses the password **`password123`**.
 | kateryna@corp.test | Kateryna Pavlenko | user | active | Taras | User whose manager is deactivated |
 | roman@corp.test | Roman Hnatiuk | user | active | — | Unassigned user (no manager may edit him) |
 
-Clients: 1,250 generated at startup by `src/server/data/client-generator.ts`, about 30% churned. A seeded PRNG keeps ids (`cl-0001` … `cl-1250`) stable across restarts.
+Clients: 1,250 generated at startup by `src/data/client-generator.ts`, about 30% churned. A seeded PRNG keeps ids (`cl-0001` … `cl-1250`) stable across restarts.
 
 ## 3. Auth approach, and how rule 5 works
 
@@ -61,17 +61,17 @@ Two framework details make this work in Next 16:
 
 ## 4. Every place a permission decision is made
 
-**Decisions: one file.** `src/server/auth/policy.ts` holds every "may this actor do this?" answer: feature access, visibility scope, per-target actions, `authorizeUserUpdate()` (rules 1–4). The functions are pure and get their data from `src/types/roles.ts` (the capability table).
+**Decisions: one file.** `src/server/auth/policy.ts` holds every "may this actor do this?" answer: feature access, visibility scope, per-target actions, `authorizeUserUpdate()` (rules 1–4). The functions are pure and get their data from `src/types/Roles.ts` (the capability matrix), read through the helpers in `src/lib/roles.ts`.
 
 **Where those decisions get enforced (the call sites):**
 
 | Call site | Calls | Protects |
 |---|---|---|
-| `src/server/services/users.ts` | `canAccessUserManagement`, `filterVisibleUsers`, `canCreateUser`, `canAssignManagers`, `canViewUser`, `authorizeUserUpdate`, `canViewContent` | All of `/api/users*`, `/api/me` |
+| `src/server/services/users.ts` | `canAccessUserManagement`, `filterVisibleUsers`, `canCreateUser`, `canAssignManagers`, `canViewUser`, `authorizeUserUpdate`, `canViewContent` | All of `/api/users*`, `/api/profile`, the `/manage-users` and `/content/me` pages |
 | `src/server/services/clients.ts` | `canViewContent` | `/api/clients*`, client detail page |
 | `src/server/auth/guards.ts` → `requirePageActor(policyFn)` in the 4 protected pages | `canViewContent` / `canAccessUserManagement` | Page rendering: 403 or redirect to `/login` |
 
-`src/app/layout.tsx` also calls `canViewContent` / `canAccessUserManagement`, but only to decide which nav links to *show*. The UI's enabled/disabled controls come from `allowedActionsOn()`, computed server-side and sent as `allowed` flags. No client code makes a permission decision, and ESLint stops `src/components` from importing server code or the role matrix.
+`src/app/(main)/layout.tsx` also calls `canViewContent` / `canAccessUserManagement`, but only to decide which nav links to *show*. The UI's enabled/disabled controls come from `allowedActionsOn()`, computed server-side and sent as `allowed` flags. No client code makes a permission decision, and ESLint stops `src/components` and `src/client` from importing server code, the store or the role matrix.
 
 ## Architecture in one picture
 
@@ -86,19 +86,19 @@ Browser ──nav────▶ src/app/**/page.tsx ─────┤  (thin: 
                               │   2. validate vs data (email unique, manager valid, no cycles)
                               │   3. write to store   (synchronous → no race on rule 4)
                               ▼
-                         src/server/data/store.ts    ← one object on globalThis
+                         src/data/store.ts           ← one object on globalThis
 ```
 
 ### Rule-by-rule
 
 | Rule | Where | How |
 |---|---|---|
-| 1. Only IT creates users / changes role / status | `policy.ts` capability flags from `roles.ts` | `createUser` checks `canCreateUser`; `authorizeUserUpdate` checks `changeRole`, `changeStatus`, `assignManager` for every field that *actually changes* |
+| 1. Only IT creates users / changes role / status | `policy.ts` capability flags from `Roles.ts` | `createUser` checks `canCreateUser`; `authorizeUserUpdate` checks `changeRole`, `changeStatus`, `assignManager` for every field that *actually changes* |
 | 2. Managers edit name/email of direct reports only | `isInScope("directReports")` | `target.managerId === actor.id && target.id !== actor.id`. Other managers, self and unassigned users all fail. Out-of-team users return 404 (no id probing). |
 | 3. No self-deactivate / self-demote | `authorizeUserUpdate` | Any change to your own role, or deactivating yourself → `409 SELF_LOCKOUT` |
 | 4. Never zero active IT | `authorizeUserUpdate` | If the change would leave the target not an active administrator and nobody else is one → `409 LAST_ADMINISTRATOR`. Covers both deactivation and demotion. |
 | 5. Deactivation is immediate | `session.ts` | Status is re-read on every request; nothing is cached |
-| 6. A new role changes one place | `src/types/roles.ts` | Capabilities, not role names; `Record<Role, …>` makes TS demand a full definition; a test fails on inline role comparisons |
+| 6. A new role changes one place | `src/types/Roles.ts` | Capabilities, not role names; `Record<Role, …>` makes TypeScript demand a full definition. `src/lib/roles.ts` only reads the matrix, so it never changes. |
 
 ### API
 
@@ -108,7 +108,7 @@ All errors share one shape: `{ "error": { "code", "message", "details"? } }`.
 |---|---|---|
 | `POST /api/auth/login` `{email,password}` | anyone | Sets the session cookie, returns `{ landingPath }` |
 | `POST /api/auth/logout` | anyone | Destroys the session, 303 → `/login` |
-| `GET /api/me` | manager, user | Own profile |
+| `GET /api/profile` | manager, user | Own profile (the API behind `/content/me`) |
 | `GET /api/clients?page&limit&sort&order&q&status` | manager, user | One page + `total`/`totalPages`. `limit` ≤ 100. |
 | `GET /api/clients/:id` | manager, user | |
 | `GET /api/users` | IT (all), manager (reports) | Each row carries server-computed `allowed` flags |
@@ -151,10 +151,20 @@ curl -s -o /dev/null -w '%{http_code}\n' -b /tmp/olena.jar $B/api/clients
 - **The URL drives the client table.** Page, sort and filter live in the query string, so refresh and back/forward work. Each click is also a server navigation, which re-checks the session before the API call even runs.
 - **Org-chart integrity.** A manager must have a role with `canHaveReports`; there are no reporting cycles; and you can't change a manager's role away from manager while they still have reports.
 
+## Testing
+
+- `npm test` runs unit tests for `src/server/auth/policy.ts`: the role matrix, direct-report scope (rule 2), self-lockout (rule 3) and the last administrator (rule 4).
+- Scenarios 7–12 were verified against the running API with the curl commands above. Restart `npm run dev` first: they change in-memory data.
+- Not automated yet: the scenario walkthrough (see "With another four hours").
+
+## Time spent
+
+About 4 h 45 min of building, in one sitting (11:00–15:45 in the commit history), plus the documentation afterwards. The order was deliberate: the permission policy, sessions and the users/clients API (rules 1–5) were built and verified with curl first; the UI came after. It was my first project on Next.js 16, and part of the time went into its changes (`forbidden()`, Cache Components, `proxy.ts`).
+
 ## 5. With another four hours
 
 1. **Audit trail.** An append-only `auditLog` in the store, written inside `updateUser`/`createUser` (actor, target, before → after, timestamp), plus a read-only view for IT.
-2. **Browser e2e tests (Playwright)** for the UI half of the scenarios: the 403 page, the redirect after deactivation mid-browse, and checking that the network tab shows one page per request.
+2. **Automated scenario tests.** Turn the curl walkthrough above into vitest tests that call the route handlers directly, then add Playwright for the UI half of the scenarios: the 403 page, the redirect after deactivation mid-browse, and checking that the network tab shows one page per request.
 3. **Persistence behind a repository interface.** Move the store behind `UserRepository` / `SessionRepository` so swapping in Postgres touches one layer, with rule 4's check-and-write in a `SERIALIZABLE` transaction (or `SELECT … FOR UPDATE` on the IT rows).
 4. **Session hardening.** Sliding expiry, session rotation on login, a CSRF token for state-changing requests (SameSite=Lax covers most cases, not all), and rate limiting on `/api/auth/login`.
 5. **UX polish.** Field-level validation messages, optimistic updates with rollback, a confirmation step before deactivation, and pagination for `/manage-users` once there are many users.
