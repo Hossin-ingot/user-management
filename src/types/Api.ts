@@ -41,3 +41,11 @@ export interface Page<T> {
   total: number;
   totalPages: number;
 }
+
+export interface ApiError {
+  error: {
+    code: string;
+    message: string;
+    details?: { code?: string; field?: string; message: string }[];
+  };
+}
