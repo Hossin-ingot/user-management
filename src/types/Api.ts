@@ -49,3 +49,6 @@ export interface ApiError {
     details?: { code?: string; field?: string; message: string }[];
   };
 }
+
+export type ClientSortField = "name" | "company" | "country" | "status" | "createdAt";
+export type SortOrder = "asc" | "desc";
