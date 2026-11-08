@@ -60,3 +60,5 @@ export const clientListQuerySchema = z.object({
   q: z.string().trim().max(100).optional(),
   status: z.enum(["active", "churned"]).optional(),
 });
+
+export type ClientListQuery = z.infer<typeof clientListQuerySchema>;

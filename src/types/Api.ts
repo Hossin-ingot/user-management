@@ -33,3 +33,11 @@ export interface ManageUsersResponse {
     managerOptions: { id: string; fullName: string }[];
   };
 }
+
+export interface Page<T> {
+  items: T[];
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
